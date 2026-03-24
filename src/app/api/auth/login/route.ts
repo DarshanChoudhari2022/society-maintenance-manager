@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       );
     } catch (e) {}
     return Response.json(
-      { error: "Something went wrong" },
+      { error: "Login System Error: " + (error?.message || String(error)) },
       { status: 500 }
     );
   }
