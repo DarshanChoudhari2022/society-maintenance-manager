@@ -1,6 +1,5 @@
-import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-
 import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as {
@@ -12,7 +11,10 @@ function createPrismaClient() {
   if (!url) {
     throw new Error("Missing DATABASE_URL environment variable.");
   }
-  const pool = new Pool({ connectionString: url });
+  const pool = new Pool({
+    connectionString: url,
+    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : undefined,
+  });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }
