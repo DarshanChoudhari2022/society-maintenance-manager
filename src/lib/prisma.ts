@@ -10,7 +10,9 @@ export const prisma = new Proxy({} as PrismaClient, {
       if (!process.env.DATABASE_URL) {
         throw new Error("🚨 Vercel Environment Error: The 'DATABASE_URL' variable is completely missing or misspelled in your Vercel Dashboard Settings!");
       }
-      globalForPrisma._prisma = new PrismaClient();
+      globalForPrisma._prisma = new PrismaClient({
+        datasourceUrl: process.env.DATABASE_URL,
+      });
     }
     // @ts-ignore
     return globalForPrisma._prisma[prop];
@@ -18,5 +20,7 @@ export const prisma = new Proxy({} as PrismaClient, {
 });
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma._prisma = globalForPrisma._prisma || new PrismaClient();
+  globalForPrisma._prisma = globalForPrisma._prisma || new PrismaClient({
+    datasourceUrl: process.env.DATABASE_URL,
+  });
 }
