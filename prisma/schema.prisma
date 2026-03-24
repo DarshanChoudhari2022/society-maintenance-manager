@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Society {
+  id             String   @id @default(cuid())
+  name           String
+  address        String
+  city           String
+  pincode        String
+  totalFlats     Int      @default(0)
+  maintenanceAmt Float    @default(0)
+  dueDayOfMonth  Int      @default(10)
+  lateFee        Float    @default(0)
+  upiId          String?
+  bankDetails    String?
+  planTier       String   @default("starter")
+  createdAt      DateTime @default(now())
+
+  flats    Flat[]
+  users    User[]
+  bills    MaintenanceBill[]
+  expenses Expense[]
+}
+
+model Flat {
+  id            String   @id @default(cuid())
+  societyId     String
+  flatNumber    String
+  wing          String?
+  floor         Int?
+  ownerName     String
+  tenantName    String?
+  contact       String
+  email         String?
+  vehicleNumber String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  society   Society           @relation(fields: [societyId], references: [id])
+  bills     MaintenanceBill[]
+  reminders ReminderLog[]
+
+  @@unique([societyId, flatNumber])
+}
+
+model MaintenanceBill {
+  id            String    @id @default(cuid())
+  flatId        String
+  societyId     String
+  amount        Float
+  lateFee       Float     @default(0)
+  period        String // "2026-03" format
+  dueDate       DateTime
+  status        String    @default("pending") // pending | paid
+  paidAt        DateTime?
+  paidVia       String? // cash | upi | neft | cheque
+  paidAmount    Float?
+  receiptNote   String?
+  receiptNumber String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  flat    Flat    @relation(fields: [flatId], references: [id])
+  society Society @relation(fields: [societyId], references: [id])
+
+  @@unique([flatId, period])
+}
+
+model ReminderLog {
+  id          String   @id @default(cuid())
+  flatId      String
+  billId      String?
+  channel     String // whatsapp | sms
+  sentAt      DateTime @default(now())
+  status      String // sent | failed | delivered
+  messageBody String
+  flat        Flat     @relation(fields: [flatId], references: [id])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  phone     String?
+  role      String   @default("member") // chairman | secretary | treasurer | member
+  societyId String?
+  flatId    String?
+  createdAt DateTime @default(now())
+  society   Society? @relation(fields: [societyId], references: [id])
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  societyId String
+  title     String
+  amount    Float
+  category  String // maintenance | repair | salary | utilities | other
+  paidTo    String?
+  paidOn    DateTime
+  notes     String?
+  createdAt DateTime @default(now())
+  society   Society  @relation(fields: [societyId], references: [id])
+}
