@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import toast from "react-hot-toast";
-import { Plus, Vote, BarChart3, Lock } from "lucide-react";
+import { Plus, Vote, BarChart3, Lock, Share2 } from "lucide-react";
 
 interface Poll {
   id: string;
@@ -23,10 +23,19 @@ export default function PollsPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [voteFlat, setVoteFlat] = useState("");
+  const [userRole, setUserRole] = useState("member");
   const [form, setForm] = useState({ title: "", description: "", options: ["", ""], closesAt: "" });
 
   const fetchPolls = useCallback(() => {
     setLoading(true);
+    
+    // Also fetch user role
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.user) setUserRole(d.user.role);
+      })
+      .catch(() => {});
     fetch("/api/polls")
       .then((r) => r.json())
       .then((d) => setPolls(d.polls || []))
@@ -112,9 +121,11 @@ export default function PollsPage() {
             <p className="text-sm text-text-secondary mt-0.5">{polls.filter((p) => p.status === "active").length} active polls</p>
           </div>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn btn-primary btn-sm">
-          <Plus className="w-4 h-4" /> Create Poll
-        </button>
+        {userRole !== "member" && (
+          <button onClick={() => setShowForm(true)} className="btn btn-primary btn-sm">
+            <Plus className="w-4 h-4" /> Create Poll
+          </button>
+        )}
       </div>
 
       {/* Vote flat input */}
@@ -139,7 +150,13 @@ export default function PollsPage() {
             const totalVotes = Object.values(votes).reduce((s, v) => s + v, 0);
             const hasVoted = voteFlat && voters.includes(voteFlat);
             const isClosed = poll.status === "closed";
-            const showResults = isClosed || hasVoted;
+            const showResults = isClosed || hasVoted || userRole === "chairman";
+
+            const shareOnWhatsApp = () => {
+              const optionsList = options.map((o, i) => `${i + 1}. ${o}`).join("\n");
+              const text = `*New Society Poll: ${poll.title}*\n${poll.description ? `\n_${poll.description}_\n` : "\n"}Options:\n${optionsList}\n\nPlease login to the Society Dashboard to cast your vote!`;
+              window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+            };
 
             return (
               <div key={poll.id} className={`card ${isClosed ? "opacity-80" : ""}`}>
@@ -155,15 +172,20 @@ export default function PollsPage() {
                     </div>
                     {poll.description && <p className="text-sm text-text-secondary">{poll.description}</p>}
                     <p className="text-xs text-text-secondary mt-1">
-                      By {poll.createdBy} · {voters.length} votes
+                      By {poll.createdBy} · {totalVotes} votes
                       {poll.closesAt && ` · Closes ${new Date(poll.closesAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`}
                     </p>
                   </div>
-                  {!isClosed && (
-                    <button onClick={() => closePoll(poll.id)} className="btn btn-secondary btn-sm !py-1 !px-2 text-xs">
-                      <Lock className="w-3 h-3" /> Close
+                  <div className="flex items-center gap-2">
+                    <button onClick={shareOnWhatsApp} className="btn btn-secondary btn-sm !py-1 !px-2 text-xs flex items-center gap-1 hover:text-green-600">
+                      <Share2 className="w-3 h-3" /> Share
                     </button>
-                  )}
+                    {!isClosed && userRole !== "member" && (
+                      <button onClick={() => closePoll(poll.id)} className="btn btn-secondary btn-sm !py-1 !px-2 text-xs text-danger hover:bg-danger/10">
+                        <Lock className="w-3 h-3" /> Close
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">

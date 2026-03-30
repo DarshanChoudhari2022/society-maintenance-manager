@@ -51,6 +51,7 @@ interface SidebarProps {
   societyAddress?: string;
   isOpen?: boolean;
   onClose?: () => void;
+  userRole?: string;
 }
 
 export default function Sidebar({
@@ -58,6 +59,7 @@ export default function Sidebar({
   societyAddress = "Navi Mumbai",
   isOpen = false,
   onClose,
+  userRole = "member",
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -114,6 +116,20 @@ export default function Sidebar({
                   <div key={i} className="my-2 border-t border-border" />
                 );
               }
+              
+              // Role-based filtering
+              if (userRole === "member") {
+                const hiddenForMembers = [
+                  "/members",
+                  "/reminders",
+                  "/reports",
+                  "/expenses"
+                ];
+                if (hiddenForMembers.includes(item.href)) {
+                  return null;
+                }
+              }
+
               const Icon = item.icon;
               const isActive = pathname.startsWith(item.href);
               return (

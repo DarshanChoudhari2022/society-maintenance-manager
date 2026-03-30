@@ -45,6 +45,7 @@ export default function DashboardLayout({
         societyAddress={user.societyAddress}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        userRole={user.role}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header
