@@ -11,8 +11,13 @@ export async function GET() {
   const period = getCurrentPeriod();
   const societyId = session.societyId;
 
-  // Get society for opening balance
-  const society = await prisma.society.findUnique({ where: { id: societyId } });
+  // Get society for opening balance (wrapped in try-catch in case schema is outdated)
+  let society = null;
+  try {
+    society = await prisma.society.findUnique({ where: { id: societyId } });
+  } catch {
+    // Schema mismatch, ignore
+  }
 
   // Get bills for current period
   const bills = await prisma.maintenanceBill.findMany({
