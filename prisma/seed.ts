@@ -1,8 +1,14 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   // Clear existing data
@@ -217,11 +223,11 @@ async function main() {
   }
 
   console.log("✅ Seed data created successfully!");
-  console.log(`   Society: ${society.name}`);
-  console.log(`   Flats: ${flats.length}`);
-  console.log(`   Active flats: ${activeFlats.length}`);
-  console.log(`   Bills: ${activeFlats.length} (40 paid, 18 pending)`);
-  console.log(`   Login: admin@sunshine.com / admin123`);
+  console.log(` Society: ${society.name}`);
+  console.log(` Flats: ${flats.length}`);
+  console.log(` Active flats: ${activeFlats.length}`);
+  console.log(` Bills: ${activeFlats.length} (40 paid, 18 pending)`);
+  console.log(` Login: admin@sunshine.com / admin123`);
 }
 
 main()

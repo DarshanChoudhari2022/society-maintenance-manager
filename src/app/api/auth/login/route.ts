@@ -37,10 +37,10 @@ export async function POST(request: NextRequest) {
         societyId: user.societyId,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Login Error:", error);
     return Response.json(
-      { error: "Login System Error: " + (error?.message || String(error)) },
+      { error: "Login System Error: " + (error instanceof Error ? error.message : String(error)) },
       { status: 500 }
     );
   }

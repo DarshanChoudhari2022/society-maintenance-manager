@@ -40,7 +40,6 @@ export default function ReportsPage() {
   })();
 
   useEffect(() => {
-    setLoading(true);
     if (tab === "monthly") {
       fetch(`/api/reports/monthly?period=${period}`)
         .then((r) => r.json())
@@ -77,7 +76,7 @@ export default function ReportsPage() {
         {(["monthly", "annual"] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => { setTab(t); setLoading(true); }}
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               tab === t ? "bg-primary text-white" : "text-text-secondary hover:text-text-primary"
             }`}
