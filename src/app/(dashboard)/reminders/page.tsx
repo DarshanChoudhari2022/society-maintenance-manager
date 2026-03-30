@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import toast from "react-hot-toast";
 import { Send, Check, X, MessageSquare } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
-import { defaultTemplates } from "@/lib/whatsapp";
+import { formatCurrency, formatPeriod, formatDate } from "@/lib/utils";
+import { defaultTemplates, fillTemplate } from "@/lib/whatsapp";
 
 interface PendingFlat {
   id: string;
@@ -13,44 +13,116 @@ interface PendingFlat {
   ownerName: string;
   contact: string;
   amount: number;
+  dueDate: string;
   lastReminder: string | null;
   sent?: boolean;
   failed?: boolean;
 }
 
+interface SocietyInfo {
+  name: string;
+  upiId: string | null;
+}
+
 export default function RemindersPage() {
   const [pendingFlats, setPendingFlats] = useState<PendingFlat[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [template, setTemplate] = useState(defaultTemplates.english);
   const [lang, setLang] = useState<"english" | "marathi">("english");
+  const [society, setSociety] = useState<SocietyInfo | null>(null);
+  const [userName, setUserName] = useState("");
+  const [useApi, setUseApi] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const period = (() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   })();
 
+  const periodLabel = (() => {
+    const [y, m] = period.split("-").map(Number);
+    return new Date(y, m - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  })();
+
+  // Fetch society info and user info
   useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        setUserName(d.user?.name || "Chairman");
+        if (d.society) {
+          setSociety({ name: d.society.name, upiId: d.society.upiId });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const fetchPending = useCallback(() => {
+    setLoading(true);
     fetch(`/api/maintenance/bills?period=${period}&status=pending`)
       .then((r) => r.json())
       .then((data) => {
-        const flats = (data.bills || []).map((b: { id: string; flatId: string; amount: number; flat: { id: string; flatNumber: string; ownerName: string; contact: string } }) => ({
-          id: b.id,
-          flatId: b.flat.id,
-          flatNumber: b.flat.flatNumber,
-          ownerName: b.flat.ownerName,
-          contact: b.flat.contact,
-          amount: b.amount,
-          lastReminder: null,
-        }));
+        const flats = (data.bills || []).map(
+          (b: {
+            id: string;
+            flatId: string;
+            amount: number;
+            dueDate: string;
+            flat: { id: string; flatNumber: string; ownerName: string; contact: string };
+          }) => ({
+            id: b.id,
+            flatId: b.flat.id,
+            flatNumber: b.flat.flatNumber,
+            ownerName: b.flat.ownerName,
+            contact: b.flat.contact,
+            amount: b.amount,
+            dueDate: b.dueDate,
+            lastReminder: null,
+          })
+        );
         setPendingFlats(flats);
-        setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => toast.error("Failed to load pending bills"))
+      .finally(() => setLoading(false));
   }, [period]);
 
-  const sendReminder = async (flatIds: string[]) => {
+  useEffect(() => {
+    fetchPending();
+  }, [fetchPending]);
+
+  // Build a WhatsApp message for a flat
+  const buildMessage = (flat: PendingFlat) => {
+    return fillTemplate(template, {
+      ownerName: flat.ownerName,
+      flatNumber: flat.flatNumber,
+      societyName: society?.name || "Society",
+      amount: flat.amount.toString(),
+      period: formatPeriod(period),
+      dueDate: formatDate(flat.dueDate),
+      upiId: society?.upiId || "N/A",
+      chairmanName: userName,
+    });
+  };
+
+  // Send via wa.me link (always works, no API needed)
+  const sendViaWhatsApp = (flat: PendingFlat) => {
+    const message = buildMessage(flat);
+    const phone = flat.contact.replace(/\D/g, "");
+    const url = `https://wa.me/91${phone}?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank");
+
+    // Mark as sent in UI
+    setPendingFlats((prev) =>
+      prev.map((f) =>
+        f.flatId === flat.flatId ? { ...f, sent: true, lastReminder: "Just now" } : f
+      )
+    );
+    toast.success(`WhatsApp opened for ${flat.ownerName}`);
+  };
+
+  // Send via API (requires WhatsApp Business API credentials)
+  const sendViaApi = async (flatIds: string[]) => {
     try {
       const res = await fetch("/api/reminders/send", {
         method: "POST",
@@ -81,22 +153,31 @@ export default function RemindersPage() {
     }
   };
 
-  const sendAll = async () => {
-    setSending(true);
-    await sendReminder(pendingFlats.map((f) => f.flatId));
-    setSending(false);
-  };
-
-  const sendSingle = async (flatId: string) => {
-    setSendingId(flatId);
-    await sendReminder([flatId]);
+  const sendSingle = async (flat: PendingFlat) => {
+    setSendingId(flat.flatId);
+    if (useApi) {
+      await sendViaApi([flat.flatId]);
+    } else {
+      sendViaWhatsApp(flat);
+    }
     setSendingId(null);
   };
 
-  const periodLabel = (() => {
-    const [y, m] = period.split("-").map(Number);
-    return new Date(y, m - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
-  })();
+  const sendAll = async () => {
+    setSending(true);
+    if (useApi) {
+      await sendViaApi(pendingFlats.filter((f) => !f.sent).map((f) => f.flatId));
+    } else {
+      // Open wa.me links one by one with delay
+      const unsent = pendingFlats.filter((f) => !f.sent);
+      for (const flat of unsent) {
+        sendViaWhatsApp(flat);
+        // Small delay so browser doesn't block popups
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
+    setSending(false);
+  };
 
   return (
     <div>
@@ -117,10 +198,42 @@ export default function RemindersPage() {
           ) : (
             <>
               <Send className="w-4 h-4" />
-              Send to all {pendingFlats.length} pending
+              Send to all {pendingFlats.filter((f) => !f.sent).length} pending
             </>
           )}
         </button>
+      </div>
+
+      {/* Sending Mode Toggle */}
+      <div className="card mb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-sm">Sending Method</h3>
+            <p className="text-xs text-text-secondary mt-0.5">
+              {useApi
+                ? "Using WhatsApp Business API (auto-sends without opening WhatsApp)"
+                : "Opens WhatsApp with pre-filled message (recommended)"}
+            </p>
+          </div>
+          <div className="flex gap-1 bg-surface rounded-lg p-0.5">
+            <button
+              onClick={() => setUseApi(false)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                !useApi ? "bg-white text-primary shadow-sm" : "text-text-secondary"
+              }`}
+            >
+              Direct Link
+            </button>
+            <button
+              onClick={() => setUseApi(true)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                useApi ? "bg-white text-primary shadow-sm" : "text-text-secondary"
+              }`}
+            >
+              API (Business)
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Template Editor */}
@@ -200,7 +313,7 @@ export default function RemindersPage() {
                         </span>
                       ) : (
                         <button
-                          onClick={() => sendSingle(f.flatId)}
+                          onClick={() => sendSingle(f)}
                           disabled={sendingId === f.flatId}
                           className="btn btn-secondary btn-sm !py-1 !px-2 text-xs"
                         >

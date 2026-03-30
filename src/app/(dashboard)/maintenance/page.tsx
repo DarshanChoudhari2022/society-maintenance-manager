@@ -83,20 +83,33 @@ export default function MaintenancePage() {
 
   const handleMarkPaid = async () => {
     if (!markPaidBill) return;
+    const paidAmount = parseFloat(payForm.paidAmount) || 0;
+    const isPartial = paidAmount < markPaidBill.amount;
+    const remaining = markPaidBill.amount - paidAmount;
+    
+    // Auto-append remaining note if it's partial and note doesn't already have it
+    let note = payForm.receiptNote;
+    if (isPartial && remaining > 0) {
+      const remainingText = `₹${remaining} remaining`;
+      if (!note.includes(remainingText)) {
+        note = note ? `${note} (${remainingText})` : remainingText;
+      }
+    }
+
     try {
       const res = await fetch(`/api/maintenance/bills/${markPaidBill.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "paid",
-          paidAmount: parseFloat(payForm.paidAmount) || markPaidBill.amount,
+          status: isPartial ? "partial" : "paid",
+          paidAmount: paidAmount,
           paidVia: payForm.paidVia,
           paidAt: payForm.paidAt,
-          receiptNote: payForm.receiptNote,
+          receiptNote: note,
         }),
       });
       if (res.ok) {
-        toast.success(`Flat ${markPaidBill.flat.flatNumber} marked as paid`);
+        toast.success(`Flat ${markPaidBill.flat.flatNumber} marked as ${isPartial ? "partially paid" : "paid"}`);
         fetchBills();
       } else {
         toast.error("Failed to update");
@@ -109,9 +122,10 @@ export default function MaintenancePage() {
 
   const openMarkPaid = (bill: BillWithFlat) => {
     setMarkPaidBill(bill);
+    const remaining = bill.status === "partial" && bill.paidAmount ? bill.amount - bill.paidAmount : bill.amount;
     setPayForm({
-      paidAmount: bill.amount.toString(),
-      paidVia: "cash",
+      paidAmount: remaining.toString(),
+      paidVia: bill.paidVia || "cash",
       paidAt: new Date().toISOString().split("T")[0],
       receiptNote: "",
     });
@@ -244,6 +258,15 @@ export default function MaintenancePage() {
                         <Link href={`/receipts/${bill.id}`} className="btn btn-secondary btn-sm !py-1 !px-2 text-xs">
                           <FileText className="w-3 h-3" /> Receipt
                         </Link>
+                      ) : bill.status === "partial" ? (
+                        <>
+                          <button onClick={() => openMarkPaid(bill)} className="btn btn-primary btn-sm !py-1 !px-2 text-xs">
+                            Collect ₹{bill.paidAmount ? bill.amount - bill.paidAmount : bill.amount}
+                          </button>
+                          <Link href={`/receipts/${bill.id}`} className="btn btn-secondary btn-sm !py-1 !px-2 text-xs">
+                            <FileText className="w-3 h-3" />
+                          </Link>
+                        </>
                       ) : (
                         <>
                           <button onClick={() => openMarkPaid(bill)} className="btn btn-success btn-sm !py-1 !px-2 text-xs">
@@ -275,13 +298,23 @@ export default function MaintenancePage() {
             </h3>
             <div className="space-y-3">
               <div>
-                <label className="label">Amount Collected *</label>
+                <label className="label">
+                  Amount Collected * 
+                  <span className="text-xs text-text-secondary ml-2 font-normal">
+                    (Total: {formatCurrency(markPaidBill.amount)})
+                  </span>
+                </label>
                 <input
                   type="number"
                   className="input"
                   value={payForm.paidAmount}
                   onChange={(e) => setPayForm({ ...payForm, paidAmount: e.target.value })}
                 />
+                {parseFloat(payForm.paidAmount) < markPaidBill.amount && (
+                  <p className="text-xs text-danger mt-1">
+                    Remaining: {formatCurrency(markPaidBill.amount - (parseFloat(payForm.paidAmount) || 0))}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="label">Payment Method *</label>

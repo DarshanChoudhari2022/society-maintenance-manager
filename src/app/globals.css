@@ -156,6 +156,11 @@
     color: var(--color-danger-text);
   }
 
+  .badge-partial {
+    background: var(--color-warning-bg);
+    color: var(--color-warning-text);
+  }
+
   .badge-active {
     background: var(--color-success-bg);
     color: var(--color-success-text);

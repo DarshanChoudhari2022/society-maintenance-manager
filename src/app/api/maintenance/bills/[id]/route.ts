@@ -23,7 +23,7 @@ export async function PATCH(
     return Response.json({ error: "Bill not found" }, { status: 404 });
   }
 
-  if (body.status === "paid") {
+  if (body.status === "paid" || body.status === "partial") {
     // Generate receipt number
     const year = new Date().getFullYear();
     const lastReceipt = await prisma.maintenanceBill.findFirst({
@@ -43,12 +43,12 @@ export async function PATCH(
     const updated = await prisma.maintenanceBill.update({
       where: { id },
       data: {
-        status: "paid",
+        status: body.status,
         paidAt: body.paidAt ? new Date(body.paidAt) : new Date(),
         paidVia: body.paidVia || "cash",
         paidAmount: body.paidAmount || bill.amount,
         receiptNote: body.receiptNote || null,
-        receiptNumber: generateReceiptNumber(year, sequence),
+        receiptNumber: bill.receiptNumber || generateReceiptNumber(year, sequence),
       },
       include: { flat: true },
     });
