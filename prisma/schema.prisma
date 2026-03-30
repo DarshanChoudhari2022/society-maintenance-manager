@@ -19,12 +19,23 @@ model Society {
   upiId          String?
   bankDetails    String?
   planTier       String   @default("starter")
+  openingBalance Float    @default(0)
   createdAt      DateTime @default(now())
 
-  flats    Flat[]
-  users    User[]
-  bills    MaintenanceBill[]
-  expenses Expense[]
+  flats              Flat[]
+  users              User[]
+  bills              MaintenanceBill[]
+  expenses           Expense[]
+  complaints         Complaint[]
+  notices            Notice[]
+  visitors           Visitor[]
+  parkingSlots       ParkingSlot[]
+  facilities         Facility[]
+  facilityBookings   FacilityBooking[]
+  meetingMinutes     MeetingMinutes[]
+  emergencyContacts  EmergencyContact[]
+  polls              Poll[]
+  documents          Document[]
 }
 
 model Flat {
@@ -42,9 +53,11 @@ model Flat {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  society   Society           @relation(fields: [societyId], references: [id])
-  bills     MaintenanceBill[]
-  reminders ReminderLog[]
+  society       Society           @relation(fields: [societyId], references: [id])
+  bills         MaintenanceBill[]
+  reminders     ReminderLog[]
+  parkingSlots  ParkingSlot[]
+  visitors      Visitor[]
 
   @@unique([societyId, flatNumber])
 }
@@ -57,7 +70,7 @@ model MaintenanceBill {
   lateFee       Float     @default(0)
   period        String // "2026-03" format
   dueDate       DateTime
-  status        String    @default("pending") // pending | paid
+  status        String    @default("pending") // pending | paid | partial
   paidAt        DateTime?
   paidVia       String? // cash | upi | neft | cheque
   paidAmount    Float?
@@ -107,4 +120,159 @@ model Expense {
   notes     String?
   createdAt DateTime @default(now())
   society   Society  @relation(fields: [societyId], references: [id])
+}
+
+model Complaint {
+  id          String   @id @default(cuid())
+  societyId   String
+  flatNumber  String
+  raisedBy    String
+  title       String
+  description String
+  category    String   @default("general") // plumbing | electrical | cleanliness | security | parking | general
+  status      String   @default("open") // open | in_progress | resolved | closed
+  priority    String   @default("medium") // low | medium | high | urgent
+  resolution  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  society     Society  @relation(fields: [societyId], references: [id])
+}
+
+model Notice {
+  id        String   @id @default(cuid())
+  societyId String
+  title     String
+  body      String
+  category  String   @default("general") // general | event | maintenance | emergency | meeting
+  postedBy  String
+  isPinned  Boolean  @default(false)
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  society   Society  @relation(fields: [societyId], references: [id])
+}
+
+// ===== NEW MODELS =====
+
+model Visitor {
+  id          String    @id @default(cuid())
+  societyId   String
+  flatId      String?
+  flatNumber  String
+  visitorName String
+  phone       String?
+  purpose     String    // delivery | guest | service | cab | other
+  vehicleNo   String?
+  entryTime   DateTime  @default(now())
+  exitTime    DateTime?
+  approvedBy  String?
+  notes       String?
+  status      String    @default("in") // in | out
+  createdAt   DateTime  @default(now())
+  society     Society   @relation(fields: [societyId], references: [id])
+  flat        Flat?     @relation(fields: [flatId], references: [id])
+}
+
+model ParkingSlot {
+  id         String   @id @default(cuid())
+  societyId  String
+  slotNumber String
+  slotType   String   @default("car") // car | bike | ev
+  wing       String?
+  flatId     String?
+  isAssigned Boolean  @default(false)
+  vehicleNo  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  society    Society  @relation(fields: [societyId], references: [id])
+  flat       Flat?    @relation(fields: [flatId], references: [id])
+
+  @@unique([societyId, slotNumber])
+}
+
+model Facility {
+  id          String   @id @default(cuid())
+  societyId   String
+  name        String
+  description String?
+  capacity    Int?
+  ratePerHour Float    @default(0)
+  isActive    Boolean  @default(true)
+  rules       String?
+  createdAt   DateTime @default(now())
+  society     Society  @relation(fields: [societyId], references: [id])
+  bookings    FacilityBooking[]
+}
+
+model FacilityBooking {
+  id          String   @id @default(cuid())
+  societyId   String
+  facilityId  String
+  bookedBy    String
+  flatNumber  String
+  date        DateTime
+  startTime   String   // "09:00"
+  endTime     String   // "11:00"
+  purpose     String?
+  status      String   @default("confirmed") // confirmed | cancelled
+  amount      Float    @default(0)
+  createdAt   DateTime @default(now())
+  society     Society  @relation(fields: [societyId], references: [id])
+  facility    Facility @relation(fields: [facilityId], references: [id])
+}
+
+model MeetingMinutes {
+  id          String   @id @default(cuid())
+  societyId   String
+  title       String
+  date        DateTime
+  meetingType String   @default("general") // agm | sgm | committee | general
+  attendees   String?
+  agenda      String
+  minutes     String
+  decisions   String?
+  recordedBy  String
+  createdAt   DateTime @default(now())
+  society     Society  @relation(fields: [societyId], references: [id])
+}
+
+model EmergencyContact {
+  id          String   @id @default(cuid())
+  societyId   String
+  name        String
+  phone       String
+  category    String   // plumber | electrician | ambulance | fire | police | hospital | pest_control | other
+  address     String?
+  isAvailable Boolean  @default(true)
+  notes       String?
+  createdAt   DateTime @default(now())
+  society     Society  @relation(fields: [societyId], references: [id])
+}
+
+model Poll {
+  id          String   @id @default(cuid())
+  societyId   String
+  title       String
+  description String?
+  options     String   // JSON array of options
+  votes       String   @default("{}") // JSON object {optionIndex: count}
+  voters      String   @default("[]") // JSON array of flatNumbers that voted
+  createdBy   String
+  status      String   @default("active") // active | closed
+  closesAt    DateTime?
+  createdAt   DateTime @default(now())
+  society     Society  @relation(fields: [societyId], references: [id])
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  societyId   String
+  title       String
+  category    String   @default("general") // bylaws | rules | noc | minutes | financial | general
+  fileName    String
+  fileUrl     String
+  fileSize    Int?
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+  society     Society  @relation(fields: [societyId], references: [id])
 }

@@ -11,6 +11,9 @@ export async function GET() {
   const period = getCurrentPeriod();
   const societyId = session.societyId;
 
+  // Get society for opening balance
+  const society = await prisma.society.findUnique({ where: { id: societyId } });
+
   // Get bills for current period
   const bills = await prisma.maintenanceBill.findMany({
     where: { societyId, period },
@@ -19,12 +22,36 @@ export async function GET() {
   });
 
   const paidBills = bills.filter((b) => b.status === "paid");
+  const partialBills = bills.filter((b) => b.status === "partial");
   const pendingBills = bills.filter((b) => b.status === "pending");
 
   // Get active flats count
   const activeFlats = await prisma.flat.count({
     where: { societyId, isActive: true },
   });
+
+  // Get expenses for current month
+  const [yearStr, monthStr] = period.split("-");
+  const startDate = new Date(parseInt(yearStr), parseInt(monthStr) - 1, 1);
+  const endDate = new Date(parseInt(yearStr), parseInt(monthStr), 0);
+  
+  const expenses = await prisma.expense.findMany({
+    where: {
+      societyId,
+      paidOn: { gte: startDate, lte: endDate },
+    },
+  });
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+  // All-time totals for fund balance
+  const allPaidBills = await prisma.maintenanceBill.findMany({
+    where: { societyId, status: { in: ["paid", "partial"] } },
+  });
+  const allExpenses = await prisma.expense.findMany({ where: { societyId } });
+  
+  const totalIncome = allPaidBills.reduce((s, b) => s + (b.paidAmount || b.amount), 0);
+  const totalAllExpenses = allExpenses.reduce((s, e) => s + e.amount, 0);
+  const fundBalance = (society?.openingBalance || 0) + totalIncome - totalAllExpenses;
 
   // Recent activity (last 10)
   const recentActivity = bills.slice(0, 10).map((b) => ({
@@ -38,14 +65,40 @@ export async function GET() {
     updatedAt: b.updatedAt.toISOString(),
   }));
 
+  const totalCollected = paidBills.reduce((sum, b) => sum + (b.paidAmount || b.amount), 0)
+    + partialBills.reduce((sum, b) => sum + (b.paidAmount || 0), 0);
+  const pendingAmount = pendingBills.reduce((sum, b) => sum + b.amount, 0)
+    + partialBills.reduce((sum, b) => sum + (b.amount - (b.paidAmount || 0)), 0);
+
+  // Quick stats for new features
+  const openComplaints = await prisma.complaint.count({
+    where: { societyId, status: { in: ["open", "in_progress"] } },
+  });
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const visitorsToday = await prisma.visitor.count({
+    where: { societyId, entryTime: { gte: todayStart } },
+  }).catch(() => 0);
+
+  const activePolls = await prisma.poll.count({
+    where: { societyId, status: "active" },
+  }).catch(() => 0);
+
   return Response.json({
-    totalCollected: paidBills.reduce((sum, b) => sum + (b.paidAmount || b.amount), 0),
-    pendingAmount: pendingBills.reduce((sum, b) => sum + b.amount, 0),
+    totalCollected,
+    pendingAmount,
+    totalExpenses,
     totalMembers: activeFlats,
     paidCount: paidBills.length,
+    partialCount: partialBills.length,
     pendingCount: pendingBills.length,
     totalFlats: activeFlats,
     recentActivity,
     period,
+    fundBalance,
+    openComplaints,
+    visitorsToday,
+    activePolls,
   });
 }

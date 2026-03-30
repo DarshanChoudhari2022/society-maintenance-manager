@@ -131,6 +131,46 @@ export default function MaintenancePage() {
     });
   };
 
+  const exportCsv = async () => {
+    try {
+      const res = await fetch(`/api/maintenance/bills?period=${period}`);
+      const data = await res.json();
+      if (!data.bills || data.bills.length === 0) return toast.error("No bills to export");
+      
+      const headers = ["Flat No.", "Owner Name", "Amount", "Paid Amount", "Status", "Due Date", "Paid Date", "Payment Method", "Receipt No", "Note"];
+      const csvContent = [
+        headers.join(","),
+        ...data.bills.map((b: any) => 
+          [
+            b.flat.flatNumber, 
+            b.flat.ownerName, 
+            b.amount, 
+            b.paidAmount || 0,
+            b.status, 
+            new Date(b.dueDate).toISOString().split('T')[0],
+            b.paidAt ? new Date(b.paidAt).toISOString().split('T')[0] : "",
+            b.paidVia || "",
+            b.receiptNumber || "",
+            b.receiptNote || ""
+          ].map(v => `"${v}"`).join(",")
+        )
+      ].join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `maintenance_bills_${period}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Export successful");
+    } catch {
+      toast.error("Failed to export");
+    }
+  };
+
   return (
     <div>
       {/* Header */}
@@ -172,6 +212,9 @@ export default function MaintenancePage() {
 
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-2 mb-4">
+        <button onClick={exportCsv} className="btn btn-secondary btn-sm">
+          <FileText className="w-4 h-4" /> Export CSV
+        </button>
         {summary && summary.total === 0 && (
           <button onClick={generateBills} disabled={generating} className="btn btn-primary btn-sm">
             {generating ? <div className="spinner !w-4 !h-4 !border-white/30 !border-t-white" /> : <><Zap className="w-4 h-4" /> Generate bills for {periodLabel}</>}
@@ -198,7 +241,7 @@ export default function MaintenancePage() {
           />
         </div>
         <div className="flex gap-1 bg-white border border-border rounded-lg p-0.5">
-          {["all", "paid", "pending"].map((s) => (
+          {["all", "paid", "partial", "pending"].map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}

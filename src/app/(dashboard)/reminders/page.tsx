@@ -60,14 +60,18 @@ export default function RemindersPage() {
 
   const fetchPending = useCallback(() => {
     setLoading(true);
-    fetch(`/api/maintenance/bills?period=${period}&status=pending`)
+    fetch(`/api/maintenance/bills?period=${period}`)
       .then((r) => r.json())
       .then((data) => {
-        const flats = (data.bills || []).map(
+        const flats = (data.bills || [])
+          .filter((b: any) => b.status === "pending" || b.status === "partial")
+          .map(
           (b: {
             id: string;
             flatId: string;
             amount: number;
+            status: string;
+            paidAmount: number | null;
             dueDate: string;
             flat: { id: string; flatNumber: string; ownerName: string; contact: string };
           }) => ({
@@ -76,7 +80,7 @@ export default function RemindersPage() {
             flatNumber: b.flat.flatNumber,
             ownerName: b.flat.ownerName,
             contact: b.flat.contact,
-            amount: b.amount,
+            amount: b.status === "partial" && b.paidAmount ? b.amount - b.paidAmount : b.amount,
             dueDate: b.dueDate,
             lastReminder: null,
           })

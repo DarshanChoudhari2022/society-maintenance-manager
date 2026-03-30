@@ -43,16 +43,20 @@ export async function GET(request: NextRequest) {
   });
 
   const paidBills = allBills.filter((b) => b.status === "paid");
+  const partialBills = allBills.filter((b) => b.status === "partial");
   const pendingBills = allBills.filter((b) => b.status === "pending");
 
   return Response.json({
     bills,
     summary: {
       paid: paidBills.length,
+      partial: partialBills.length,
       pending: pendingBills.length,
       total: allBills.length,
-      collectedAmount: paidBills.reduce((s, b) => s + (b.paidAmount || b.amount), 0),
-      pendingAmount: pendingBills.reduce((s, b) => s + b.amount, 0),
+      collectedAmount: paidBills.reduce((s, b) => s + (b.paidAmount || b.amount), 0)
+        + partialBills.reduce((s, b) => s + (b.paidAmount || 0), 0),
+      pendingAmount: pendingBills.reduce((s, b) => s + b.amount, 0)
+        + partialBills.reduce((s, b) => s + (b.amount - (b.paidAmount || 0)), 0),
     },
   });
 }

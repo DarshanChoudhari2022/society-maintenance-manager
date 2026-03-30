@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { Plus, Wallet } from "lucide-react";
+import { Plus, Wallet, Download } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import type { ExpenseType } from "@/types";
 
@@ -68,6 +68,42 @@ export default function ExpensesPage() {
     other: "bg-gray-100 text-gray-700",
   };
 
+  const exportCsv = async () => {
+    try {
+      const res = await fetch(`/api/expenses`);
+      const data = await res.json();
+      if (!data.expenses || data.expenses.length === 0) return toast.error("No expenses to export");
+      
+      const headers = ["Description", "Amount", "Category", "Paid To", "Paid On", "Notes"];
+      const csvContent = [
+        headers.join(","),
+        ...data.expenses.map((e: any) => 
+          [
+            e.title, 
+            e.amount, 
+            e.category, 
+            e.paidTo || "",
+            new Date(e.paidOn).toISOString().split('T')[0],
+            e.notes || ""
+          ].map(v => `"${v}"`).join(",")
+        )
+      ].join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `expenses_${new Date().toISOString().split("T")[0]}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Export successful");
+    } catch {
+      toast.error("Failed to export");
+    }
+  };
+
   return (
     <div>
       <div className="page-header">
@@ -80,9 +116,14 @@ export default function ExpensesPage() {
             </p>
           </div>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn btn-primary btn-sm">
-          <Plus className="w-4 h-4" /> Add Expense
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={exportCsv} className="btn btn-secondary btn-sm">
+            <Download className="w-4 h-4" /> Export CSV
+          </button>
+          <button onClick={() => setShowForm(true)} className="btn btn-primary btn-sm">
+            <Plus className="w-4 h-4" /> Add Expense
+          </button>
+        </div>
       </div>
 
       {/* Add Expense Modal */}

@@ -13,14 +13,33 @@ import {
   LogOut,
   Building2,
   X,
+  Megaphone,
+  AlertTriangle,
+  UserCheck,
+  Car,
+  CalendarCheck,
+  Phone,
+  FileText,
+  Vote,
+  FolderOpen
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/members", label: "Members & Flats", icon: Users },
   { href: "/maintenance", label: "Maintenance", icon: Receipt },
+  { href: "/notices", label: "Notice Board", icon: Megaphone },
+  { href: "/complaints", label: "Complaints", icon: AlertTriangle },
   { href: "/reminders", label: "Reminders", icon: Bell },
   { divider: true },
+  { href: "/visitors", label: "Visitors", icon: UserCheck },
+  { href: "/parking", label: "Parking", icon: Car },
+  { href: "/facilities", label: "Facilities", icon: CalendarCheck },
+  { href: "/emergency", label: "Emergency", icon: Phone },
+  { divider: true },
+  { href: "/documents", label: "Documents", icon: FolderOpen },
+  { href: "/meetings", label: "Meetings", icon: FileText },
+  { href: "/polls", label: "Polls & Voting", icon: Vote },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/expenses", label: "Expenses", icon: Wallet },
   { divider: true },
@@ -53,13 +72,13 @@ export default function Sidebar({
       {/* Mobile overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm"
           onClick={onClose}
         />
       )}
 
       <aside
-        className={`fixed top-0 left-0 z-50 h-full w-64 bg-white border-r border-border flex flex-col transition-transform duration-200 ease-in-out lg:translate-x-0 ${
+        className={`fixed top-0 left-0 z-50 h-[100dvh] pb-safe w-64 bg-white border-r border-border flex flex-col transition-transform duration-200 ease-in-out lg:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         } lg:static lg:z-auto`}
       >
@@ -67,14 +86,14 @@ export default function Sidebar({
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary-light flex items-center justify-center shadow-md">
                 <Building2 className="w-5 h-5 text-white" />
               </div>
-              <div>
-                <h2 className="font-semibold text-sm text-text-primary leading-tight">
+              <div className="min-w-0">
+                <h2 className="font-semibold text-sm text-text-primary truncate">
                   {societyName}
                 </h2>
-                <p className="text-xs text-text-secondary">{societyAddress}</p>
+                <p className="text-xs text-text-secondary truncate">{societyAddress}</p>
               </div>
             </div>
             <button
@@ -88,11 +107,11 @@ export default function Sidebar({
 
         {/* Navigation */}
         <nav className="flex-1 p-3 overflow-y-auto">
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {navItems.map((item, i) => {
               if ("divider" in item) {
                 return (
-                  <div key={i} className="my-3 border-t border-border" />
+                  <div key={i} className="my-2 border-t border-border" />
                 );
               }
               const Icon = item.icon;
@@ -113,7 +132,7 @@ export default function Sidebar({
         </nav>
 
         {/* Logout */}
-        <div className="p-3 border-t border-border">
+        <div className="p-3 border-t border-border mt-auto">
           <button
             onClick={handleLogout}
             className="sidebar-link w-full text-danger hover:bg-danger-bg"

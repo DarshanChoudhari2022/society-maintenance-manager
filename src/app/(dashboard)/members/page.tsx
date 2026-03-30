@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { Plus, Upload, Search, Pencil, Trash2, MessageSquare } from "lucide-react";
+import { Plus, Upload, Search, Pencil, Trash2, MessageSquare, Download } from "lucide-react";
 import StatusBadge from "@/components/ui/StatusBadge";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
@@ -65,6 +65,35 @@ export default function MembersPage() {
     setDeleteTarget(null);
   };
 
+  const exportCsv = async () => {
+    try {
+      const res = await fetch(`/api/members?limit=1000`);
+      const data = await res.json();
+      if (!data.members || data.members.length === 0) return toast.error("No members to export");
+      
+      const headers = ["Flat No.", "Wing", "Owner Name", "Tenant Name", "Contact", "Email", "Vehicle Number", "Status"];
+      const csvContent = [
+        headers.join(","),
+        ...data.members.map((m: any) => 
+          [m.flatNumber, m.wing || "", m.ownerName, m.tenantName || "", m.contact, m.email || "", m.vehicleNumber || "", m.isActive ? "Active" : "Inactive"].map(v => `"${v}"`).join(",")
+        )
+      ].join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `society_members_${new Date().toISOString().split("T")[0]}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Export successful");
+    } catch {
+      toast.error("Failed to export");
+    }
+  };
+
   return (
     <div>
       {/* Header */}
@@ -73,7 +102,11 @@ export default function MembersPage() {
           <h1 className="page-title">Members & Flats</h1>
           <p className="text-sm text-text-secondary mt-1">{total} total flats</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={exportCsv} className="btn btn-secondary btn-sm">
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
           <Link href="/members/import" className="btn btn-secondary btn-sm">
             <Upload className="w-4 h-4" />
             Import CSV
