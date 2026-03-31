@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import {
   IndianRupee,
   Clock,
@@ -19,6 +18,7 @@ import {
   BarChart3,
   Timer,
   ShieldAlert,
+  RefreshCcw,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -26,6 +26,8 @@ import { BarChart, DonutChart, LineChart, GaugeChart } from "@/components/ui/Cha
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { useLiveData } from "@/lib/use-live-data";
+import { useState } from "react";
 
 interface DashboardData {
   totalCollected: number;
@@ -96,39 +98,29 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [applyingLateFees, setApplyingLateFees] = useState(false);
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [dashRes, analyticsRes] = await Promise.all([
-          fetch("/api/dashboard"),
-          fetch("/api/dashboard/analytics"),
-        ]);
+  // Optimized Live Data Loading with Stale-while-revalidate
+  const { 
+    data: data, 
+    loading: dashLoading, 
+    refetch: refetchDash,
+    isStale: dashStale 
+  } = useLiveData<DashboardData>({
+    url: "/api/dashboard",
+    interval: 60_000, // Refresh every 60s for "live" feel
+  });
 
-        if (dashRes.ok) {
-          const d = await dashRes.json();
-          setData(d);
-        } else {
-          console.error("Dashboard API error:", dashRes.status, await dashRes.text());
-        }
-
-        if (analyticsRes.ok) {
-          const a = await analyticsRes.json();
-          setAnalytics(a);
-        }
-      } catch (err) {
-        console.error("Failed to load dashboard:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, []);
+  const { 
+    data: analytics, 
+    loading: analyticsLoading, 
+    refetch: refetchAnalytics,
+    isStale: analyticsStale
+  } = useLiveData<AnalyticsData>({
+    url: "/api/dashboard/analytics",
+    interval: 300_000, // Refresh analytics less frequently (5m)
+  });
 
   const handleGenerateBills = async () => {
     if (!data) return;
@@ -141,7 +133,7 @@ export default function DashboardPage() {
       });
       if (res.ok) {
         toast.success("Bills generated successfully");
-        window.location.reload();
+        refetchDash();
       } else toast.error("Failed to generate bills");
     } catch {
       toast.error("Something went wrong");
@@ -157,7 +149,8 @@ export default function DashboardPage() {
       const result = await res.json();
       if (result.applied > 0) {
         toast.success(`Late fee applied to ${result.applied} overdue bills`);
-        window.location.reload();
+        refetchDash();
+        refetchAnalytics();
       } else {
         toast.success("No overdue bills to apply late fees");
       }
@@ -168,10 +161,11 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading) {
+  if (dashLoading && !data) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
         <div className="spinner" />
+        <p className="text-sm font-medium text-text-secondary animate-pulse">Loading Live Data...</p>
       </div>
     );
   }
@@ -179,7 +173,7 @@ export default function DashboardPage() {
   if (!data) {
     return (
       <div className="text-center py-12 text-text-secondary">
-        Unable to load dashboard data.
+        Unable to load dashboard data. <button onClick={() => refetchDash()} className="text-primary hover:underline">Retry</button>
       </div>
     );
   }
@@ -203,10 +197,15 @@ export default function DashboardPage() {
     : 0;
 
   return (
-    <div>
-      <div className="page-header">
+    <div className={dashStale || analyticsStale ? "opacity-90 grayscale-[0.1] transition-all" : "transition-all"}>
+      <div className="page-header relative">
         <div>
-          <h1 className="page-title">Dashboard</h1>
+          <h1 className="page-title flex items-center gap-2">
+            Dashboard
+            {(dashStale || analyticsStale) && (
+              <RefreshCcw className="w-4 h-4 text-primary animate-spin" />
+            )}
+          </h1>
           <p className="text-sm text-text-secondary mt-1">
             Overview for {periodLabel}
           </p>
@@ -433,7 +432,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Analytics Charts */}
-      {analytics && (
+      {analytics ? (
         <>
           {/* Collection Trend + Gauge */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
@@ -457,7 +456,8 @@ export default function DashboardPage() {
               />
             </div>
 
-            <div className="card flex flex-col items-center justify-center">
+            <div className="card flex flex-col items-center justify-center relative">
+              {analyticsStale && <div className="absolute top-2 right-2"><RefreshCcw className="w-3 h-3 text-text-secondary animate-spin" /></div>}
               <h3 className="font-semibold text-sm mb-4 self-start flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-primary" />
                 Collection Rate
@@ -608,7 +608,14 @@ export default function DashboardPage() {
             </div>
           </div>
         </>
-      )}
+      ) : analyticsLoading ? (
+         <div className="card h-48 flex items-center justify-center mb-6">
+            <div className="flex flex-col items-center gap-2">
+               <div className="spinner !w-6 !h-6" />
+               <p className="text-xs text-text-secondary">Loading Analytics...</p>
+            </div>
+         </div>
+      ) : null}
 
       {/* Monthly Progress */}
       <div className="card mb-6">
