@@ -3,13 +3,26 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentPeriod } from "@/lib/utils";
 
 export async function GET() {
+  try {
   const session = await getSession();
-  if (!session?.societyId) {
+  if (!session) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Handle empty string societyId - try to look it up from user record
+  let societyId = session.societyId;
+  if (!societyId) {
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { societyId: true },
+    });
+    if (!user?.societyId) {
+      return Response.json({ error: "No society associated" }, { status: 403 });
+    }
+    societyId = user.societyId;
+  }
+
   const period = getCurrentPeriod();
-  const societyId = session.societyId;
 
   // Get society for opening balance (wrapped in try-catch in case schema is outdated)
   let society = null;
@@ -106,4 +119,9 @@ export async function GET() {
     visitorsToday,
     activePolls,
   });
+  } catch (error: unknown) {
+    console.error("Dashboard API error:", error);
+    const message = error instanceof Error ? error.message : "Internal server error";
+    return Response.json({ error: message }, { status: 500 });
+  }
 }

@@ -1,6 +1,8 @@
 "use client";
 
-import { Menu, Bell } from "lucide-react";
+import { Menu } from "lucide-react";
+import NotificationCenter from "@/components/ui/NotificationCenter";
+import ThemeToggle from "@/components/ui/ThemeToggle";
 
 interface HeaderProps {
   userName?: string;
@@ -31,10 +33,8 @@ export default function Header({
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="relative p-2 rounded-lg hover:bg-surface transition-colors">
-            <Bell className="w-5 h-5 text-text-secondary" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-danger" />
-          </button>
+          <ThemeToggle />
+          <NotificationCenter />
           <div className="flex items-center gap-2.5 pl-3 border-l border-border">
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
               <span className="text-white text-xs font-semibold">

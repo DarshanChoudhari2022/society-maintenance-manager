@@ -1,6 +1,8 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
+import { logCreated } from "@/lib/activity-log";
+import { broadcastNotification } from "@/lib/notifications";
 
 export async function GET() {
   const session = await getSession();
@@ -48,6 +50,22 @@ export async function POST(request: NextRequest) {
         priority: priority || "medium",
       },
     });
+
+    // Audit log
+    await logCreated("complaint", complaint.id, `${title} - Flat ${flatNumber}`, {
+      category,
+      priority,
+      raisedBy,
+    });
+
+    // Notify committee
+    await broadcastNotification(
+      session.societyId,
+      "complaint_update",
+      `New Complaint: ${title}`,
+      `${raisedBy} from Flat ${flatNumber} raised a ${priority || "medium"} priority ${category || "general"} complaint.`,
+      "/complaints"
+    );
 
     return Response.json({ complaint }, { status: 201 });
   } catch {

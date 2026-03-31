@@ -1,6 +1,8 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
+import { logCreated } from "@/lib/activity-log";
+import { broadcastNotification } from "@/lib/notifications";
 
 export async function GET() {
   const session = await getSession();
@@ -41,6 +43,15 @@ export async function POST(request: NextRequest) {
         expiresAt: expiresAt ? new Date(expiresAt) : null,
       },
     });
+
+    await logCreated("notice", notice.id, title, { category, isPinned });
+    await broadcastNotification(
+      session.societyId,
+      "notice_new",
+      `New Notice: ${title}`,
+      `${session.name} posted a new ${category || "general"} notice.`,
+      "/notices"
+    );
 
     return Response.json({ notice }, { status: 201 });
   } catch {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
+import BottomNav from "@/components/layout/BottomNav";
 
 interface UserSession {
   name: string;
@@ -53,8 +54,9 @@ export default function DashboardLayout({
           userRole={user.role}
           onMenuToggle={() => setSidebarOpen(true)}
         />
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6 pb-20 lg:pb-6">{children}</main>
       </div>
+      <BottomNav userRole={user.role} />
     </div>
   );
 }

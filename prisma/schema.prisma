@@ -36,6 +36,9 @@ model Society {
   emergencyContacts  EmergencyContact[]
   polls              Poll[]
   documents          Document[]
+  activityLogs       ActivityLog[]
+  notifications      Notification[]
+  vendors            Vendor[]
 }
 
 model Flat {
@@ -58,6 +61,7 @@ model Flat {
   reminders     ReminderLog[]
   parkingSlots  ParkingSlot[]
   visitors      Visitor[]
+  users         User[]
 
   @@unique([societyId, flatNumber])
 }
@@ -107,6 +111,7 @@ model User {
   flatId    String?
   createdAt DateTime @default(now())
   society   Society? @relation(fields: [societyId], references: [id])
+  flat      Flat?    @relation(fields: [flatId], references: [id])
 }
 
 model Expense {
@@ -118,6 +123,8 @@ model Expense {
   paidTo    String?
   paidOn    DateTime
   notes     String?
+  vendorId  String?
+  vendor    Vendor?  @relation(fields: [vendorId], references: [id])
   createdAt DateTime @default(now())
   society   Society  @relation(fields: [societyId], references: [id])
 }
@@ -168,6 +175,8 @@ model Visitor {
   approvedBy  String?
   notes       String?
   status      String    @default("in") // in | out
+  isPreApproved Boolean @default(false)
+  expectedAt  DateTime? // Only if pre-approved
   createdAt   DateTime  @default(now())
   society     Society   @relation(fields: [societyId], references: [id])
   flat        Flat?     @relation(fields: [flatId], references: [id])
@@ -275,4 +284,63 @@ model Document {
   uploadedBy  String
   createdAt   DateTime @default(now())
   society     Society  @relation(fields: [societyId], references: [id])
+}
+
+// ===== PHASE 1: AUDIT LOG & NOTIFICATIONS =====
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  societyId   String
+  userId      String?
+  userName    String
+  action      String   // created | updated | deleted | paid | generated | sent | resolved
+  module      String   // bill | expense | complaint | notice | visitor | flat | poll | meeting | facility | parking | document | settings
+  targetId    String?
+  targetLabel String?  // human readable e.g. "Flat A-101", "Bill March 2026"
+  details     String?  // JSON string with old/new values or extra context
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+  society     Society  @relation(fields: [societyId], references: [id])
+
+  @@index([societyId, createdAt])
+  @@index([module])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  societyId   String
+  userId      String?   // null = broadcast to all
+  type        String    // bill_due | bill_paid | complaint_update | notice_new | poll_new | visitor_entry | late_fee | reminder
+  title       String
+  message     String
+  link        String?   // e.g. "/complaints" or "/maintenance"
+  isRead      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  society     Society   @relation(fields: [societyId], references: [id])
+
+  @@index([societyId, userId, isRead])
+  @@index([createdAt])
+}
+
+model Vendor {
+  id             String    @id @default(cuid())
+  societyId      String
+  name           String
+  category       String    // electrical | plumbing | lift | pest | security | cleaning | other
+  contactPerson  String?
+  phone          String?
+  email          String?
+  gstNumber      String?
+  address        String?
+  hasAMC         Boolean   @default(false)
+  amcStartDate   DateTime?
+  amcEndDate     DateTime?
+  amcAmount      Float?
+  rating         Int       @default(0) // 1-5
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  society        Society   @relation(fields: [societyId], references: [id])
+  expenses       Expense[]
 }

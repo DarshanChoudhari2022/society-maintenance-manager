@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
+import { logCreated } from "@/lib/activity-log";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -57,6 +58,12 @@ export async function POST(request: NextRequest) {
         paidOn: new Date(paidOn),
         notes: notes || null,
       },
+    });
+
+    await logCreated("expense", expense.id, `${title} - ₹${amount}`, {
+      category,
+      paidTo,
+      amount: parseFloat(amount),
     });
 
     return Response.json({ expense }, { status: 201 });

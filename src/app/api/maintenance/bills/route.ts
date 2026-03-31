@@ -2,6 +2,8 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 import { getCurrentPeriod, generateReceiptNumber } from "@/lib/utils";
+import { logCreated } from "@/lib/activity-log";
+import { broadcastNotification } from "@/lib/notifications";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -115,6 +117,22 @@ export async function POST(request: NextRequest) {
       });
       generated++;
     }
+
+    // Audit log
+    await logCreated("bill", targetPeriod, `Bills for ${targetPeriod}`, {
+      generated,
+      totalFlats: activeFlats.length,
+      amount: society.maintenanceAmt,
+    });
+
+    // Notify all members
+    await broadcastNotification(
+      session.societyId,
+      "bill_due",
+      `Maintenance Bills Generated`,
+      `${generated} maintenance bills of ₹${society.maintenanceAmt} generated for ${targetPeriod}. Due by ${society.dueDayOfMonth}th.`,
+      "/maintenance"
+    );
 
     return Response.json({ generated, skipped: 0 });
   } catch {

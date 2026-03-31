@@ -2,6 +2,8 @@ import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 import { generateReceiptNumber } from "@/lib/utils";
+import { logPayment, logUpdated } from "@/lib/activity-log";
+import { createNotification, broadcastNotification } from "@/lib/notifications";
 
 export async function PATCH(
   request: NextRequest,
@@ -17,6 +19,7 @@ export async function PATCH(
 
   const bill = await prisma.maintenanceBill.findFirst({
     where: { id, societyId: session.societyId },
+    include: { flat: true },
   });
 
   if (!bill) {
@@ -40,18 +43,36 @@ export async function PATCH(
       sequence = lastSeq + 1;
     }
 
+    const paidAmount = body.paidAmount || bill.amount;
     const updated = await prisma.maintenanceBill.update({
       where: { id },
       data: {
         status: body.status,
         paidAt: body.paidAt ? new Date(body.paidAt) : new Date(),
         paidVia: body.paidVia || "cash",
-        paidAmount: body.paidAmount || bill.amount,
+        paidAmount,
         receiptNote: body.receiptNote || null,
         receiptNumber: bill.receiptNumber || generateReceiptNumber(year, sequence),
       },
       include: { flat: true },
     });
+
+    // Audit log
+    await logPayment(id, `Flat ${bill.flat.flatNumber} - ${bill.period}`, {
+      amount: paidAmount,
+      method: body.paidVia || "cash",
+      status: body.status,
+      ownerName: bill.flat.ownerName,
+    });
+
+    // Notification to society
+    await broadcastNotification(
+      session.societyId,
+      "bill_paid",
+      `Payment Received - Flat ${bill.flat.flatNumber}`,
+      `₹${paidAmount} ${body.status === "partial" ? "partial payment" : "full payment"} received from ${bill.flat.ownerName} via ${(body.paidVia || "cash").toUpperCase()}.`,
+      "/maintenance"
+    );
 
     return Response.json({ bill: updated });
   }
@@ -68,6 +89,10 @@ export async function PATCH(
         receiptNumber: null,
       },
       include: { flat: true },
+    });
+
+    await logUpdated("bill", id, `Flat ${bill.flat.flatNumber} - ${bill.period}`, {
+      action: "reverted to pending",
     });
 
     return Response.json({ bill: updated });

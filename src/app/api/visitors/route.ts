@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
+import { logCreated } from "@/lib/activity-log";
 
 export async function GET(request: NextRequest) {
   const session = await getSession();
@@ -73,6 +74,11 @@ export async function POST(request: NextRequest) {
         approvedBy: session.name,
         notes: notes || null,
       },
+    });
+
+    await logCreated("visitor", visitor.id, `${visitorName} → Flat ${flatNumber}`, {
+      purpose,
+      vehicleNo,
     });
 
     return Response.json({ visitor }, { status: 201 });
