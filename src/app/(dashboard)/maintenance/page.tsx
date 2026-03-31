@@ -113,12 +113,18 @@ export default function MaintenancePage() {
 
   const openMarkPaid = (bill: BillWithFlat) => {
     setMarkPaidBill(bill);
-    const remaining = bill.status === "partial" && bill.paidAmount ? bill.amount - bill.paidAmount : bill.amount;
+    
+    // If bill is already paid/partial, we are "editing", so show current paid amount
+    // If pending, we show the total bill amount (initial collection)
+    const displayAmount = (bill.status !== "pending" && bill.paidAmount !== null)
+      ? bill.paidAmount 
+      : bill.amount;
+
     setPayForm({
-      paidAmount: remaining.toString(),
+      paidAmount: displayAmount.toString(),
       paidVia: bill.paidVia || "cash",
-      paidAt: new Date().toISOString().split("T")[0],
-      receiptNote: "",
+      paidAt: bill.paidAt ? new Date(bill.paidAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+      receiptNote: bill.receiptNote || "",
     });
   };
 
@@ -215,7 +221,8 @@ export default function MaintenancePage() {
               <tr>
                 <th>Flat No.</th>
                 <th>Owner Name</th>
-                <th>Amount</th>
+                <th>Total Amt</th>
+                <th className="hidden md:table-cell">Paid Amt</th>
                 <th>Status</th>
                 <th className="hidden sm:table-cell">Due Date</th>
                 <th className="text-right">Actions</th>
@@ -225,16 +232,26 @@ export default function MaintenancePage() {
               {bills.map((bill) => (
                 <tr key={bill.id}>
                   <td className="font-medium">{bill.flat.flatNumber}</td>
-                  <td>{bill.flat.ownerName}</td>
+                  <td className="min-w-[140px] truncate">{bill.flat.ownerName}</td>
                   <td className="font-medium">{formatCurrency(bill.amount)}</td>
+                  <td className="hidden md:table-cell text-text-secondary">
+                    {bill.paidAmount ? formatCurrency(bill.paidAmount) : "—"}
+                  </td>
                   <td><StatusBadge status={bill.status} /></td>
-                  <td className="hidden sm:table-cell text-text-secondary">{new Date(bill.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</td>
+                  <td className="hidden sm:table-cell text-text-secondary">
+                    {new Date(bill.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  </td>
                   <td>
                     <div className="flex items-center justify-end gap-1">
-                      {bill.status === "paid" ? (
-                        <Link href={`/receipts/${bill.id}`} className="btn btn-secondary btn-sm !py-1 !px-2 text-xs">Receipt</Link>
-                      ) : (
+                      {bill.status === "pending" ? (
                         <button onClick={() => openMarkPaid(bill)} className="btn btn-primary btn-sm !py-1 !px-2 text-xs">Collect</button>
+                      ) : (
+                        <>
+                          <button onClick={() => openMarkPaid(bill)} className="btn btn-secondary btn-sm !py-1 !px-2 text-xs" title="Edit Payment">Edit</button>
+                          <Link href={`/receipts/${bill.id}`} className="btn btn-secondary btn-sm !py-1 !px-2 text-xs" title="View Receipt">
+                            <FileText className="w-3 h-3" />
+                          </Link>
+                        </>
                       )}
                     </div>
                   </td>
@@ -248,14 +265,84 @@ export default function MaintenancePage() {
       {markPaidBill && (
         <div className="modal-overlay" onClick={() => setMarkPaidBill(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">Payment: Flat {markPaidBill.flat.flatNumber}</h3>
-            <div className="space-y-3">
-              <div><label className="label">Amount Collected (Total: {formatCurrency(markPaidBill.amount)})</label>
-                <input type="number" className="input" value={payForm.paidAmount} onChange={(e) => setPayForm({ ...payForm, paidAmount: e.target.value })} /></div>
-              <div><label className="label">Via</label><select className="select" value={payForm.paidVia} onChange={(e) => setPayForm({ ...payForm, paidVia: e.target.value })}><option value="cash">Cash</option><option value="upi">UPI</option><option value="neft">NEFT</option></select></div>
-              <div><label className="label">Receipt Note</label><input className="input" placeholder="Ref/Chq No" value={payForm.receiptNote} onChange={(e) => setPayForm({ ...payForm, receiptNote: e.target.value })} /></div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">
+                {markPaidBill.status === "pending" ? "Collect Payment" : "Update Payment"}
+              </h3>
+              <p className="text-sm font-bold text-primary">Flat {markPaidBill.flat.flatNumber}</p>
             </div>
-            <div className="flex justify-end gap-3 mt-6"><button onClick={() => setMarkPaidBill(null)} className="btn btn-secondary">Cancel</button><button onClick={handleMarkPaid} className="btn btn-primary">Save</button></div>
+            
+            <div className="space-y-4">
+              <div>
+                <div className="flex justify-between mb-1">
+                  <label className="label mb-0">Amount Collected *</label>
+                  <span className="text-[10px] text-text-secondary uppercase tracking-wider font-semibold">Total Due: {formatCurrency(markPaidBill.amount)}</span>
+                </div>
+                <input 
+                  type="number" 
+                  className="input" 
+                  autoFocus
+                  placeholder="₹"
+                  value={payForm.paidAmount} 
+                  onChange={(e) => setPayForm({ ...payForm, paidAmount: e.target.value })} 
+                />
+              </div>
+
+              <div>
+                <label className="label">Payment Method *</label>
+                <select className="select" value={payForm.paidVia} onChange={(e) => setPayForm({ ...payForm, paidVia: e.target.value })}>
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="neft">NEFT / Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="label">Payment Date *</label>
+                <input type="date" className="input" value={payForm.paidAt} onChange={(e) => setPayForm({ ...payForm, paidAt: e.target.value })} />
+              </div>
+
+              <div>
+                <label className="label">Receipt Note / Reference</label>
+                <input className="input" placeholder="e.g. UPI Ref Id or Cheque #" value={payForm.receiptNote} onChange={(e) => setPayForm({ ...payForm, receiptNote: e.target.value })} />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 mt-8">
+              <button 
+                onClick={handleMarkPaid} 
+                className="btn btn-primary w-full"
+              >
+                {markPaidBill.status === "pending" ? "Save Collection" : "Update Records"}
+              </button>
+              
+              <div className="flex gap-2">
+                <button onClick={() => setMarkPaidBill(null)} className="btn btn-secondary flex-1">Cancel</button>
+                {markPaidBill.status !== "pending" && (
+                  <button 
+                    onClick={async () => {
+                      if (!confirm("Are you sure you want to REVERT this payment? This will mark it as PENDING again.")) return;
+                      try {
+                        const res = await fetch(`/api/maintenance/bills/${markPaidBill.id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ status: "pending" }),
+                        });
+                        if (res.ok) {
+                          toast.success("Payment reverted to pending");
+                          refetch();
+                          setMarkPaidBill(null);
+                        }
+                      } catch { toast.error("Failed to revert"); }
+                    }} 
+                    className="btn btn-danger flex-1"
+                  >
+                    Reset to Pending
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
